@@ -95,3 +95,16 @@ sys_getppid(void)
 {
   return myproc()->parent->pid;
 }
+
+int
+sys_yield(void){
+  yield();
+  return 0;
+}
+
+int
+sys_test(void){
+  for(;;)
+    cprintf("ticks = %d, pid = %d, name = %s\n", ticks, myproc()->pid, myproc()->name);
+  return 0;
+}
