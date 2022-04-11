@@ -116,10 +116,17 @@ void            scheduler(void) __attribute__((noreturn));
 void            sched(void);
 void            setproc(struct proc*);
 void            sleep(void*, struct spinlock*);
+void            sleep_(void*, struct spinlock*);
 void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+void            yield_(void);
+int             setpriority(int, int);
+void            priority_boost(void);
+void            qlvl_down(void);
+void            update_tq(void);
+int             getlev(void);
 
 // swtch.S
 void            swtch(struct context**, struct context*);
@@ -164,7 +171,6 @@ void            idtinit(void);
 extern uint     ticks;
 void            tvinit(void);
 extern struct spinlock tickslock;
-bool            iswakeup;
 
 // uart.c
 void            uartinit(void);

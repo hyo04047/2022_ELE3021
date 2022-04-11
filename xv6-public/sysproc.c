@@ -71,7 +71,11 @@ sys_sleep(void)
       release(&tickslock);
       return -1;
     }
+  #ifdef MLFQ_SCHED
+    sleep_(&ticks, &tickslock);
+  #else
     sleep(&ticks, &tickslock);
+  #endif
   }
   release(&tickslock);
   return 0;
@@ -97,14 +101,41 @@ sys_getppid(void)
 }
 
 int
-sys_yield(void){
-  yield();
-  return 0;
-}
-
-int
 sys_test(void){
   for(;;)
     cprintf("ticks = %d, pid = %d, name = %s\n", ticks, myproc()->pid, myproc()->name);
+  return 0;
+}
+
+void
+sys_yield(void){
+#ifdef MLFQ_SCHED
+  yield_();
+#else
+  yield();
+#endif
+}
+
+int
+sys_getlev(void){
+#ifdef MLFQ_SCHED
+  return getlev();
+#endif
+  return 0;
+}
+
+int sys_setpriority(void){
+#ifdef MLFQ_SCHED
+  int pid, priority;
+  if(argint(0, &pid) < 0)
+    return -1;
+  if(argint(1, &priority) < 0)
+    return -1;
+
+  if(priority < 0 || priority > 10)
+    return -2;
+  else
+    return setpriority(pid, priority);
+#endif
   return 0;
 }

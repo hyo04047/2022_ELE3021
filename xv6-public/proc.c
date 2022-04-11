@@ -75,7 +75,7 @@ allocproc(void)
 {
   struct proc *p;
   char *sp;
-
+  
   acquire(&ptable.lock);
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
@@ -88,7 +88,11 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
-
+#ifdef MLFQ_SCHED
+  p->tq = 0;
+  p->qlvl = 0;
+  p->priority = 0;
+#endif
   release(&ptable.lock);
 
   // Allocate kernel stack.
@@ -311,6 +315,59 @@ wait(void)
   }
 }
 
+void
+priority_boost(void){
+  struct proc *p;
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    p->tq = 0;
+    p->qlvl = 0;
+  }
+  release(&ptable.lock);
+}
+
+int
+setpriority(int pid, int priority){
+  struct proc *p;
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == pid && p->parent->pid == myproc()->pid){
+      p->priority = priority;
+      release(&ptable.lock);
+      return 0;
+    }
+  }
+  release(&ptable.lock);
+  return -1;
+}
+
+void
+qlvl_down(void){
+#ifdef MLFQ_SCHED
+  acquire(&ptable.lock);
+  myproc()->tq = 0;
+  myproc()->qlvl++;
+  release(&ptable.lock);
+#endif
+}
+
+void
+update_tq(void){
+#ifdef MLFQ_SCHED
+  acquire(&ptable.lock);
+  myproc()->tq++;
+  release(&ptable.lock);
+#endif
+}
+
+int
+getlev(void){
+#ifdef MLFQ_SCHED
+  return myproc()->qlvl;
+#endif
+  return 0;
+}
+
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -330,8 +387,8 @@ scheduler(void)
   for(;;){
     // Enable interrupts on this processor.
     sti();
-    struct proc *proc_odd;
-    bool evenproc_exist = FALSE;
+    struct proc *proc_odd = 0;
+    int evenproc_exist = 0;
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -342,11 +399,10 @@ scheduler(void)
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
       if(p->pid % 2 == 0){
-        evenproc_exist = TRUE;
+        evenproc_exist = 1;
         c->proc = p;
         switchuvm(p);
         p->state = RUNNING;
-        test();
         swtch(&(c->scheduler), p->context);
         switchkvm();
 
@@ -355,25 +411,28 @@ scheduler(void)
         c->proc = 0;
         continue;
       }
-      if(p->pid % 2 == 1 && proc_odd->pid > p->pid){
-        proc_odd = p;
+
+      if(p->pid % 2 == 1){
+        if(!proc_odd){
+          proc_odd = p;
+        }
+        else if(proc_odd->pid > p->pid){
+          proc_odd = p;
+        }
         continue;
       }
     }
-
-    if(proc_odd && evenproc_exist == FALSE){
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
-      test();
-      swtch(&(c->scheduler), p->context);
+    if(proc_odd && evenproc_exist == 0){
+      c->proc = proc_odd;
+      switchuvm(proc_odd);
+      proc_odd->state = RUNNING;
+      swtch(&(c->scheduler), proc_odd->context);
       switchkvm();
 
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0; 
     }
-
     release(&ptable.lock);
   }
 
@@ -384,25 +443,46 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
+    struct proc *p_select = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
+      if(p->state != RUNNABLE || p->qlvl == MLFQ_K){
         continue;
+      }
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
+      if(!p_select){
+        p_select = p;
+      }
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
+      else if(p_select->qlvl > p->qlvl){
+        p_select = p;
         continue;
+      }
       
+      else if(p_select->qlvl == p->qlvl){
+        if(p_select->tq == 0 && p_select->priority < p->priority){
+          p_select = p;
+          continue;
+        }
+        if(p_select->tq == 0 && p->tq != 0){
+          p_select = p;
+          continue;
+        }
+      }
     }
+    // Switch to chosen process.  It is the process's job
+    // to release ptable.lock and then reacquire it
+    // before jumping back to us.
+    if(p_select){
+      c->proc = p_select;
+      switchuvm(p_select);
+      p_select->state = RUNNING;
+      swtch(&(c->scheduler), p_select->context);
+      switchkvm();
+    }
+ 
+    // Process is done running for now.
+    // It should have changed its p->state before coming back.
+    c->proc = 0;
     release(&ptable.lock);
 
   }
@@ -474,6 +554,18 @@ yield(void)
   release(&ptable.lock);
 }
 
+void
+yield_(void)
+{
+  acquire(&ptable.lock);  //DOC: yieldlock
+  myproc()->state = RUNNABLE;
+  myproc()->tq = 0;
+  myproc()->qlvl = 0;
+  sched();
+  release(&ptable.lock);
+}
+
+
 // A fork child's very first scheduling by scheduler()
 // will swtch here.  "Return" to user space.
 void
@@ -521,6 +613,41 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
+
+  sched();
+
+  // Tidy up.
+  p->chan = 0;
+
+  // Reacquire original lock.
+  if(lk != &ptable.lock){  //DOC: sleeplock2
+    release(&ptable.lock);
+    acquire(lk);
+  }
+}
+
+// Atomically release lock and sleep on chan.
+// Reacquires lock when awakened.
+void
+sleep_(void *chan, struct spinlock *lk)
+{
+  struct proc *p = myproc();
+  
+  if(p == 0)
+    panic("sleep");
+
+  if(lk == 0)
+    panic("sleep without lk");
+
+  if(lk != &ptable.lock){  //DOC: sleeplock0
+    acquire(&ptable.lock);  //DOC: sleeplock1
+    release(lk);
+  }
+  // Go to sleep.
+  p->chan = chan;
+  p->state = SLEEPING;
+  p->tq = 0;
+  p->qlvl = 0;
 
   sched();
 

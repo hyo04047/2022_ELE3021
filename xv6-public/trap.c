@@ -67,6 +67,12 @@ trap(struct trapframe *tf)
       acquire(&tickslock);
       ticks++;
       wakeup(&ticks);
+    #ifdef MLFQ_SCHED
+      if(myproc())
+        update_tq();
+      if(ticks % 100 == 0)
+        priority_boost();
+    #endif
       release(&tickslock);
     }
     lapiceoi();
@@ -119,7 +125,9 @@ trap(struct trapframe *tf)
   // If interrupts were on while locks held, would need to check nlock.
 #ifdef MLFQ_SCHED
   if(myproc() && myproc()->state == RUNNING && tf->trapno == T_IRQ0+IRQ_TIMER){
-      yield();
+    if(myproc()->tq >= myproc()->qlvl * 4 + 2)
+      qlvl_down(); 
+    yield();
   }
 #else
   if(myproc() && myproc()->state == RUNNING && tf->trapno == T_IRQ0+IRQ_TIMER)
