@@ -317,6 +317,7 @@ wait(void)
 
 void
 priority_boost(void){
+#ifdef MLFQ_SCHED
   struct proc *p;
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -324,10 +325,12 @@ priority_boost(void){
     p->qlvl = 0;
   }
   release(&ptable.lock);
+#endif
 }
 
 int
 setpriority(int pid, int priority){
+#ifdef MLFQ_SCHED
   struct proc *p;
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -339,6 +342,9 @@ setpriority(int pid, int priority){
   }
   release(&ptable.lock);
   return -1;
+#else
+  return 0;
+#endif
 }
 
 void
@@ -557,12 +563,14 @@ yield(void)
 void
 yield_(void)
 {
+#ifdef MLFQ_SCHED
   acquire(&ptable.lock);  //DOC: yieldlock
   myproc()->state = RUNNABLE;
   myproc()->tq = 0;
   myproc()->qlvl = 0;
   sched();
   release(&ptable.lock);
+#endif
 }
 
 
@@ -631,6 +639,7 @@ sleep(void *chan, struct spinlock *lk)
 void
 sleep_(void *chan, struct spinlock *lk)
 {
+#ifdef MLFQ_SCHED
   struct proc *p = myproc();
   
   if(p == 0)
@@ -659,6 +668,7 @@ sleep_(void *chan, struct spinlock *lk)
     release(&ptable.lock);
     acquire(lk);
   }
+#endif
 }
 
 //PAGEBREAK!
