@@ -18,7 +18,7 @@ exec(char *path, char **argv)
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
-
+  // struct thread *t;
   begin_op();
 
   if((ip = namei(path)) == 0){
@@ -63,6 +63,7 @@ exec(char *path, char **argv)
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
   sz = PGROUNDUP(sz);
+  curproc->sp = sz;
   if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0)
     goto bad;
   clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
@@ -97,8 +98,32 @@ exec(char *path, char **argv)
   oldpgdir = curproc->pgdir;
   curproc->pgdir = pgdir;
   curproc->sz = sz;
+  // curproc->ustack[curproc->fidx] = sz;
+  // curproc->fidx = (curproc->fidx + 1) / NTHREAD;
+  // for(t = curproc->threads; t < &curproc->threads[NTHREAD]; t++){
+  //   if((t - curproc->threads) == curproc->curthread){
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
+      // curproc->ustack[t - curproc->threads] = sz;
+    // t->ustack = sz;
+    // continue;
+  // }
+  // switchuvm(curproc);
+  // freevm(oldpgdir);
+  thread_terminate(curproc->pid, curproc->tid);
+
+  // if(t->kstack != 0){
+  // t>kstack = 0;
+  // t->ustack = 0;
+  // }
+  // switchuvm(curproc);
+  // freevm(oldpgdir);
+  curproc->parentproc = curproc;
+  // curproc->fidx = 0;
+  // curproc->sidx = 0;
+  curproc->retval = 0;
+  curproc->tid = 0;
+  // }
   switchuvm(curproc);
   freevm(oldpgdir);
   return 0;

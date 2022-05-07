@@ -156,6 +156,8 @@ switchkvm(void)
 void
 switchuvm(struct proc *p)
 {
+  // struct thread *t;
+  // t = &p->threads[p->curthread];
   if(p == 0)
     panic("switchuvm: no process");
   if(p->kstack == 0)
@@ -238,6 +240,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       return 0;
     }
     memset(mem, 0, PGSIZE);
+    // cprintf("map %d ~ %d\n", a, a + PGSIZE);
     if(mappages(pgdir, (char*)a, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0){
       cprintf("allocuvm out of memory (2)\n");
       deallocuvm(pgdir, newsz, oldsz);

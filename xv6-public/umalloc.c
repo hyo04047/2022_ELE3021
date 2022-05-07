@@ -51,6 +51,7 @@ morecore(uint nu)
 
   if(nu < 4096)
     nu = 4096;
+  // printf(1, "sbrk(%d)\n", nu * sizeof(Header));
   p = sbrk(nu * sizeof(Header));
   if(p == (char*)-1)
     return 0;

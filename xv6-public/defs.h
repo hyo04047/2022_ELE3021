@@ -127,6 +127,10 @@ void            priority_boost(void);
 void            qlvl_down(void);
 void            update_tq(void);
 int             getlev(void);
+int             thread_create(thread_t*, void*(*)(void*), void*);
+void            thread_exit(void*);
+int             thread_join(thread_t, void**);
+void            thread_terminate(int, int);
 
 // swtch.S
 void            swtch(struct context**, struct context*);

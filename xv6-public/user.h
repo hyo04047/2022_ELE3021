@@ -29,6 +29,9 @@ void yield(void);
 int test(void);
 int getlev(void);
 int setpriority(int, int);
+int thread_create(thread_t*, void*(*)(void*), void*);
+void thread_exit(void*);
+int thread_join(thread_t, void**);
 
 // ulib.c
 int stat(const char*, struct stat*);

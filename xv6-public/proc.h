@@ -34,11 +34,22 @@ struct context {
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+// struct thread {
+//   enum procstate state;
+//   int tid;
+//   void *chan;
+//   char *kstack;
+//   struct trapframe *tf;
+//   struct context *context;
+//   void *retval;
+// };
+
 // Per-process state
 struct proc {
   uint sz;                     // Size of process memory (bytes)
   pde_t* pgdir;                // Page table
   char *kstack;                // Bottom of kernel stack for this process
+  uint ustack[NTHREAD];
   enum procstate state;        // Process state
   int pid;                     // Process ID
   struct proc *parent;         // Parent process
@@ -48,6 +59,14 @@ struct proc {
   int killed;                  // If non-zero, have been killed
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
+  // struct thread threads[NTHREAD];
+  // int curthread;
+  int tid;
+  void *retval;
+  int sidx;
+  int fidx;
+  uint sp;
+  struct proc *parentproc;
 
 #ifdef MLFQ_SCHED
   int priority;                // Priority for scheduling
