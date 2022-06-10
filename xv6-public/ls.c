@@ -29,6 +29,7 @@ ls(char *path)
   int fd;
   struct dirent de;
   struct stat st;
+  char mode[8];
 
   if((fd = open(path, 0)) < 0){
     printf(2, "ls: cannot open %s\n", path);
@@ -43,7 +44,23 @@ ls(char *path)
 
   switch(st.type){
   case T_FILE:
-    printf(1, "%s %d %d %d\n", fmtname(path), st.type, st.ino, st.size);
+    for (int i = 0; i < 7; i++)
+      mode[i] = '-';
+    mode[7] = '\0';
+    if (st.mode & MODE_RUSR)
+      mode[1] = 'r';
+    if (st.mode & MODE_WUSR)
+      mode[2] = 'w';
+    if (st.mode & MODE_XUSR)
+      mode[3] = 'x';
+    if (st.mode & MODE_ROTH)
+      mode[4] = 'r';
+    if (st.mode & MODE_WOTH)
+      mode[5] = 'w';
+    if (st.mode & MODE_XOTH)
+      mode[6] = 'x';
+    mode[0] = '-';
+    printf(1, "%s %s %s %d %d %d\n", fmtname(path), st.id, mode, st.type, st.ino, st.size);
     break;
 
   case T_DIR:
@@ -63,7 +80,26 @@ ls(char *path)
         printf(1, "ls: cannot stat %s\n", buf);
         continue;
       }
-      printf(1, "%s %d %d %d\n", fmtname(buf), st.type, st.ino, st.size);
+      for (int i = 0; i < 7; i++)
+        mode[i] = '-';
+      mode[7] = '\0';
+      if (st.mode & MODE_RUSR)
+        mode[1] = 'r';
+      if (st.mode & MODE_WUSR)
+        mode[2] = 'w';
+      if (st.mode & MODE_XUSR)
+        mode[3] = 'x';
+      if (st.mode & MODE_ROTH)
+        mode[4] = 'r';
+      if (st.mode & MODE_WOTH)
+        mode[5] = 'w';
+      if (st.mode & MODE_XOTH)
+        mode[6] = 'x';
+      if(st.type == T_FILE)
+        mode[0] = '-';
+      else if(st.type == T_DIR)
+        mode[0] = 'd';
+      printf(1, "%s %s %s %d %d %d\n", fmtname(buf), st.id, mode, st.type, st.ino, st.size);
     }
     break;
   }

@@ -14,6 +14,14 @@ sys_fork(void)
 }
 
 int
+sys_fork2(void)
+{
+  char *username;
+  if(argstr(0, &username) < 0) return -1;
+  return fork2(username);
+}
+
+int
 sys_exit(void)
 {
   exit();

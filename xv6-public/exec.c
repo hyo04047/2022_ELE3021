@@ -6,6 +6,10 @@
 #include "defs.h"
 #include "x86.h"
 #include "elf.h"
+#include "spinlock.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
 
 int
 exec(char *path, char **argv)
@@ -20,7 +24,7 @@ exec(char *path, char **argv)
   struct proc *curproc = myproc();
   // struct thread *t;
   begin_op();
-
+  // cprintf("executing %s\n", path);
   if((ip = namei(path)) == 0){
     end_op();
     cprintf("exec: fail\n");
@@ -28,9 +32,17 @@ exec(char *path, char **argv)
   }
   ilock(ip);
   pgdir = 0;
+  if(!strncmp(myproc()->id, "root", 16) || !strncmp(myproc()->id, ip->user, 16)){
+    if(!(ip->mode & MODE_XUSR))
+      goto bad;
+  }
+  else{
+    if(!(ip->mode & MODE_XOTH))
+      goto bad;
+  }
 
   // Check ELF header
-  if(readi(ip, (char*)&elf, 0, sizeof(elf)) != sizeof(elf))
+  if (readi(ip, (char *)&elf, 0, sizeof(elf)) != sizeof(elf))
     goto bad;
   if(elf.magic != ELF_MAGIC)
     goto bad;
@@ -63,7 +75,7 @@ exec(char *path, char **argv)
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
   sz = PGROUNDUP(sz);
-  curproc->sp = sz;
+  // curproc->sp = sz;
   if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0)
     goto bad;
   clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
@@ -104,26 +116,26 @@ exec(char *path, char **argv)
   //   if((t - curproc->threads) == curproc->curthread){
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
-      // curproc->ustack[t - curproc->threads] = sz;
-    // t->ustack = sz;
-    // continue;
-  // }
-  // switchuvm(curproc);
-  // freevm(oldpgdir);
-  thread_terminate(curproc->pid, curproc->tid);
+  //     // curproc->ustack[t - curproc->threads] = sz;
+  //   // t->ustack = sz;
+  //   // continue;
+  // // }
+  // // switchuvm(curproc);
+  // // freevm(oldpgdir);
+  // thread_terminate(curproc->pid, curproc->tid);
 
-  // if(t->kstack != 0){
-  // t>kstack = 0;
-  // t->ustack = 0;
-  // }
-  // switchuvm(curproc);
-  // freevm(oldpgdir);
-  curproc->parentproc = curproc;
-  // curproc->fidx = 0;
-  // curproc->sidx = 0;
-  curproc->retval = 0;
-  curproc->tid = 0;
-  // }
+  // // if(t->kstack != 0){
+  // // t>kstack = 0;
+  // // t->ustack = 0;
+  // // }
+  // // switchuvm(curproc);
+  // // freevm(oldpgdir);
+  // curproc->parentproc = curproc;
+  // // curproc->fidx = 0;
+  // // curproc->sidx = 0;
+  // curproc->retval = 0;
+  // curproc->tid = 0;
+  // // }
   switchuvm(curproc);
   freevm(oldpgdir);
   return 0;

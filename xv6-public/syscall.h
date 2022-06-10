@@ -29,3 +29,9 @@
 #define SYS_thread_create 28
 #define SYS_thread_exit 29
 #define SYS_thread_join 30
+#define SYS_usysinit 31
+#define SYS_addUser 32
+#define SYS_fork2 33
+#define SYS_deleteUser 34
+#define SYS_accountcheck 35
+#define SYS_chmod 36

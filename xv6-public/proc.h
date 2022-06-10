@@ -61,12 +61,12 @@ struct proc {
   struct inode *cwd;           // Current directory
   // struct thread threads[NTHREAD];
   // int curthread;
-  int tid;
-  void *retval;
-  int sidx;
-  int fidx;
-  uint sp;
-  struct proc *parentproc;
+  // int tid;
+  // void *retval;
+  // int sidx;
+  // int fidx;
+  // uint sp;
+  // struct proc *parentproc;
 
 #ifdef MLFQ_SCHED
   int priority;                // Priority for scheduling
@@ -75,6 +75,8 @@ struct proc {
 #endif
 
   char name[16];               // Process name (debugging)
+
+  char id[16];
 };
 
 // Process memory is laid out contiguously, low addresses first:

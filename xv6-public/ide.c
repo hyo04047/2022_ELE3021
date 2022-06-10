@@ -75,8 +75,11 @@ idestart(struct buf *b)
 {
   if(b == 0)
     panic("idestart");
-  if(b->blockno >= FSSIZE)
+  // cprintf("blockno : %d\n", b->blockno);
+  if(b->blockno >= FSSIZE){
+    cprintf("blockno : %x\n", b->blockno);
     panic("incorrect blockno");
+  }
   int sector_per_block =  BSIZE/SECTOR_SIZE;
   int sector = b->blockno * sector_per_block;
   int read_cmd = (sector_per_block == 1) ? IDE_CMD_READ :  IDE_CMD_RDMUL;
@@ -104,7 +107,7 @@ void
 ideintr(void)
 {
   struct buf *b;
-
+  // cprintf("ideintr\n");
   // First queued buffer is the active request.
   acquire(&idelock);
 
@@ -138,7 +141,7 @@ void
 iderw(struct buf *b)
 {
   struct buf **pp;
-
+  // cprintf("iderw\n");
   if(!holdingsleep(&b->lock))
     panic("iderw: buf not locked");
   if((b->flags & (B_VALID|B_DIRTY)) == B_VALID)

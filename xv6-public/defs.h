@@ -9,6 +9,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct utable;
 
 // bio.c
 void            binit(void);
@@ -131,6 +132,7 @@ int             thread_create(thread_t*, void*(*)(void*), void*);
 void            thread_exit(void*);
 int             thread_join(thread_t, void**);
 void            thread_terminate(int, int);
+int             fork2(char*);
 
 // swtch.S
 void            swtch(struct context**, struct context*);
@@ -202,3 +204,5 @@ int				myfunction(char*);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+
+int             accountcheck(char*, char*);

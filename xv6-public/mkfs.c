@@ -16,7 +16,7 @@
 #endif
 
 #define NINODES 200
-
+// extern char *strcpy(char *s, const char *t);
 // Disk layout:
 // [ boot block | sb block | log | inode blocks | free bit map | data blocks ]
 
@@ -230,6 +230,8 @@ ialloc(ushort type)
   din.type = xshort(type);
   din.nlink = xshort(1);
   din.size = xint(0);
+  strncpy(din.id, "root", 16);
+  din.mode = MODE_RUSR | MODE_WUSR | MODE_XUSR | MODE_ROTH | MODE_XOTH;
   winode(inum, &din);
   return inum;
 }
@@ -264,7 +266,7 @@ iappend(uint inum, void *xp, int n)
 
   rinode(inum, &din);
   off = xint(din.size);
-  // printf("append inum %d at off %d sz %d\n", inum, off, n);
+
   while(n > 0){
     fbn = off / BSIZE;
     assert(fbn < MAXFILE);

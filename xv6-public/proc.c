@@ -90,16 +90,17 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
-  p->tid = 0;
-  p->parentproc = p;
-  p->sidx = 0;
-  p->fidx = 0;
+  // p->tid = 0;
+  // p->parentproc = p;
+  // p->sidx = 0;
+  // p->fidx = 0;
   // p->curthread = 0;
 #ifdef MLFQ_SCHED
   p->tq = 0;
   p->qlvl = 0;
   p->priority = 0;
 #endif
+  strncpy(p->id, "root", 4);
   // t = p->threads;
   // t->state = EMBRYO;
   // t->tid = nexttid++;
@@ -188,7 +189,7 @@ growproc(int n)
   struct proc *p;
   acquire(&ptable.lock);
   // p = (curproc->parentproc) ? curproc->parentproc : curproc;
-  // sz = curproc->sz;
+  sz = curproc->sz;
   // if (curproc->fidx == curproc->sidx)
   // {
   //   // cprintf("p->sz : %d\n", p->sz);
@@ -199,7 +200,7 @@ growproc(int n)
   //   sz = curproc->ustack[curproc->fidx - 1];
   //   cprintf("sz : %d, fidx = %d\n", sz, curproc->fidx);
   // }
-  sz = curproc->parentproc->sz;
+  // sz = curproc->parentproc->sz;
   
   if(n > 0){
     if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
@@ -251,7 +252,7 @@ fork(void)
     return -1;
   }
 
-  acquire(&ptable.lock);
+  // acquire(&ptable.lock);
   
   // cprintf("fork-2\n");
   // np->curthread = 0;
@@ -277,19 +278,97 @@ fork(void)
   //     np->sidx = np->sidx + 1;
   //   }
   // }
-  release(&ptable.lock);
+  // release(&ptable.lock);
   np->sz = curproc->sz;
   np->parent = curproc;
-  np->sp = curproc->sp;
+  // np->sp = curproc->sp;
   *np->tf = *curproc->tf;
-  np->sidx = curproc->sidx;
-  np->fidx = curproc->fidx;
-
+  // np->sidx = curproc->sidx;
+  // np->fidx = curproc->fidx;
+  strncpy(np->id, curproc->id, sizeof(curproc->id));
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
 
   for(i = 0; i < NOFILE; i++)
     if(curproc->ofile[i])
+      np->ofile[i] = filedup(curproc->ofile[i]);
+  np->cwd = idup(curproc->cwd);
+
+  safestrcpy(np->name, curproc->name, sizeof(curproc->name));
+
+  pid = np->pid;
+
+  acquire(&ptable.lock);
+
+  np->state = RUNNABLE;
+  // np->threads->state = RUNNABLE;
+
+  release(&ptable.lock);
+  // cprintf("fork end\n");
+  return pid;
+}
+
+int fork2(char *username)
+{
+  int i = 0, pid;
+  struct proc *np;
+  // struct proc *p;
+  struct proc *curproc = myproc();
+  // cprintf("fork start\n");
+  // Allocate process.
+  if ((np = allocproc()) == 0)
+  {
+    return -1;
+  }
+  // cprintf("fork-1\n");
+  // Copy process state from proc.
+  if ((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0)
+  {
+    kfree(np->kstack);
+    np->kstack = 0;
+    np->state = UNUSED;
+    return -1;
+  }
+
+  // acquire(&ptable.lock);
+
+  // cprintf("fork-2\n");
+  // np->curthread = 0;
+  // for(i = 0; i < NTHREAD; i++)
+  //   np->ustack[i] = curproc->ustack[i];
+
+  // ustack_ = np->ustack[0];
+  // np->ustack[0] = np->ustack[curproc->curthread];
+  // np->ustack[curproc->curthread] = ustack_;
+
+  // acquire(&ptable.lock);
+  // for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+  //   if(p->pid == curproc->pid && p->tid != curproc->tid){
+  //     deallocuvm(np->pgdir, p->sp + 2*PGSIZE, p->sp);
+  //   }
+  // }
+  // for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  // {
+  //   if (p->pid == curproc->pid && p->tid != curproc->tid)
+  //   {
+  //     deallocuvm(np->pgdir, p->sp + PGSIZE, p->sp);
+  //     np->ustack[np->sidx] = p->sp;
+  //     np->sidx = np->sidx + 1;
+  //   }
+  // }
+  // release(&ptable.lock);
+  np->sz = curproc->sz;
+  np->parent = curproc;
+  // np->sp = curproc->sp;
+  *np->tf = *curproc->tf;
+  // np->sidx = curproc->sidx;
+  // np->fidx = curproc->fidx;
+  strncpy(np->id, username, 16);
+  // Clear %eax so that fork returns 0 in the child.
+  np->tf->eax = 0;
+
+  for (i = 0; i < NOFILE; i++)
+    if (curproc->ofile[i])
       np->ofile[i] = filedup(curproc->ofile[i]);
   np->cwd = idup(curproc->cwd);
 
@@ -902,157 +981,157 @@ procdump(void)
 int
 thread_create(thread_t *thread, void*(*start_routine)(void*), void *arg)
 {
-  struct proc *p, *curproc = myproc();
-  // struct thread *t;
-  uint sp;
-  int sz, i;
-  int ustack[2];
-  pde_t *pgdir;
+//   struct proc *p, *curproc = myproc();
+//   // struct thread *t;
+//   uint sp;
+//   int sz, i;
+//   int ustack[2];
+//   pde_t *pgdir;
 
-  // p = myproc();
-//   for (t = p->threads; t < &p->threads[NTHREAD]; t++)
-//     if (t->state == UNUSED)
-//       goto found;
+//   // p = myproc();
+// //   for (t = p->threads; t < &p->threads[NTHREAD]; t++)
+// //     if (t->state == UNUSED)
+// //       goto found;
 
+// //   release(&ptable.lock);
+// //   return -1;
+
+// // found:
+// //   p->curthread = t - p->threads;
+// //   t->tid = nexttid++;
+
+//   // if(pgdir == 0){
+//   //   p->state = UNUSED;
+//   //   return -1;
+//   // }
+
+//   // Allocate kernel stack.
+//   // if (p->kstack[p->curthread] == 0 && (p->kstack[p->curthread] = kalloc()) == 0)
+//   // {
+//   //   t->tid = 0;
+//   //   t->state = UNUSED;
+//   //   release(&ptable.lock);
+//   //   return -1;
+//   // }
+//   // t->kstack = p->kstack[p->curthread];
+//   // sp = t->kstack + KSTACKSIZE;
+
+//   // Leave room for trap frame.
+//   // sp -= sizeof *t->tf;
+//   // t->tf = (struct trapframe *)sp;
+//   // *t->tf = *p->threads[p->curthread].tf;
+
+//   // Set up new context to start executing at forkret,
+//   // which returns to trapret.
+//   // sp -= 4;
+//   // *(uint *)sp = (uint)trapret;
+
+//   // sp -= sizeof *t->context;
+//   // t->context = (struct context *)sp;
+//   // memset(t->context, 0, sizeof *t->context);
+//   // t->context->eip = (uint)forkret;
+//   // cprintf("create start\n");
+//   if((p = allocproc()) == 0)
+//     return -1;
+
+//   if((pgdir = curproc->pgdir) == 0){
+//     // kfree(p->kstack);
+//     // p->kstack = 0;
+//     p->state = UNUSED;
+//     return -1;
+//   }
+
+//   p->sz = curproc->sz;
+//   p->sidx = curproc->sidx;
+//   p->fidx = curproc->fidx;
+//   p->parent = curproc->parent;
+//   *p->tf = *curproc->tf;
+
+//   p->tf->eax = 0;
+//   // cprintf("create-1\n");
+//   for(i = 0; i < NOFILE; i++)
+//     if(curproc->ofile[i])
+//       p->ofile[i] = filedup(curproc->ofile[i]);
+//   p->cwd = idup(curproc->cwd);
+
+//   safestrcpy(p->name, curproc->name, sizeof(curproc->name));
+//   acquire(&ptable.lock);
+//   p->pid = curproc->pid;
+//   p->parentproc = curproc;
+//   p->tid = nexttid++;
+//   // release(&ptable.lock);
 //   release(&ptable.lock);
-//   return -1;
-
-// found:
-//   p->curthread = t - p->threads;
-//   t->tid = nexttid++;
-
-  // if(pgdir == 0){
-  //   p->state = UNUSED;
+//   if(p->fidx == p->sidx){
+//     // cprintf("p->sz : %d\n", p->sz);
+//     sz = p->sz;
+//   }
+//   else{
+//     sz = curproc->ustack[curproc->fidx];
+//     // cprintf("sz : %d, fidx = %d\n", sz, curproc->fidx);
+//   }
+//   // else{
+//   //   sz = PGROUNDUP(p->sz);
+//   //   if((sz = allocuvm(p->pgdir, sz, sz + PGSIZE)) == 0){
+//   //     t->kstack = 0;
+//   //     t->tid = 0;
+//   //     t->state = UNUSED;
+//   //     release(&ptable.lock);
+//   //     return -1;
+//   //   }
+//   //   p->sz = sz;
+//   //   p->ustack[p->curthread] = sz;
+//   //   // t->ustack = sz;
+//   // }
+//   // int oldsz = sz;
+//   if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0){
+//     p->kstack = 0;
+//     p->tid = 0;
+//     p->state = UNUSED;
+//     release(&ptable.lock);
   //   return -1;
   // }
 
-  // Allocate kernel stack.
-  // if (p->kstack[p->curthread] == 0 && (p->kstack[p->curthread] = kalloc()) == 0)
-  // {
-  //   t->tid = 0;
-  //   t->state = UNUSED;
+  // clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
+
+  // sp = sz;
+  // sp -= 4;
+
+  // ustack[0] = 0xffffffff;
+
+  // sp -= 4;
+
+  // ustack[1] = (uint)arg;
+  // if(copyout(pgdir, sp, ustack, 8) < 0){
+  //   p->kstack = 0;
+  //   p->tid = 0;
+  //   p->state = UNUSED;
   //   release(&ptable.lock);
   //   return -1;
   // }
-  // t->kstack = p->kstack[p->curthread];
-  // sp = t->kstack + KSTACKSIZE;
 
-  // Leave room for trap frame.
-  // sp -= sizeof *t->tf;
-  // t->tf = (struct trapframe *)sp;
-  // *t->tf = *p->threads[p->curthread].tf;
+  // p->sp = sz - 2*PGSIZE;
+  // if(curproc->fidx == curproc->sidx)
+  //   curproc->sz = sz;
+  // else
+  //   curproc->fidx = (curproc->fidx + 1);
+  // p->sz = sz;
+  // p->pgdir = pgdir;
+  // curproc->sz = sz;
 
-  // Set up new context to start executing at forkret,
-  // which returns to trapret.
-  // sp -= 4;
-  // *(uint *)sp = (uint)trapret;
+  // p->tf->esp = (uint)sp;
+  // p->tf->eip = (uint)start_routine;
+  // acquire(&ptable.lock);
+  // *thread = p->tid;
+  // // p->tid = *thread;
 
-  // sp -= sizeof *t->context;
-  // t->context = (struct context *)sp;
-  // memset(t->context, 0, sizeof *t->context);
-  // t->context->eip = (uint)forkret;
-  // cprintf("create start\n");
-  if((p = allocproc()) == 0)
-    return -1;
-
-  if((pgdir = curproc->pgdir) == 0){
-    // kfree(p->kstack);
-    // p->kstack = 0;
-    p->state = UNUSED;
-    return -1;
-  }
-
-  p->sz = curproc->sz;
-  p->sidx = curproc->sidx;
-  p->fidx = curproc->fidx;
-  p->parent = curproc->parent;
-  *p->tf = *curproc->tf;
-
-  p->tf->eax = 0;
-  // cprintf("create-1\n");
-  for(i = 0; i < NOFILE; i++)
-    if(curproc->ofile[i])
-      p->ofile[i] = filedup(curproc->ofile[i]);
-  p->cwd = idup(curproc->cwd);
-
-  safestrcpy(p->name, curproc->name, sizeof(curproc->name));
-  acquire(&ptable.lock);
-  p->pid = curproc->pid;
-  p->parentproc = curproc;
-  p->tid = nexttid++;
-  // release(&ptable.lock);
-  release(&ptable.lock);
-  if(p->fidx == p->sidx){
-    // cprintf("p->sz : %d\n", p->sz);
-    sz = p->sz;
-  }
-  else{
-    sz = curproc->ustack[curproc->fidx];
-    // cprintf("sz : %d, fidx = %d\n", sz, curproc->fidx);
-  }
-  // else{
-  //   sz = PGROUNDUP(p->sz);
-  //   if((sz = allocuvm(p->pgdir, sz, sz + PGSIZE)) == 0){
-  //     t->kstack = 0;
-  //     t->tid = 0;
-  //     t->state = UNUSED;
-  //     release(&ptable.lock);
-  //     return -1;
-  //   }
-  //   p->sz = sz;
-  //   p->ustack[p->curthread] = sz;
-  //   // t->ustack = sz;
+  // p->state = RUNNABLE;
+  // for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  // {
+  //   if (p->pid == curproc->pid)
+  //     p->sz = sz;
   // }
-  // int oldsz = sz;
-  if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0){
-    p->kstack = 0;
-    p->tid = 0;
-    p->state = UNUSED;
-    release(&ptable.lock);
-    return -1;
-  }
-
-  clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
-
-  sp = sz;
-  sp -= 4;
-
-  ustack[0] = 0xffffffff;
-
-  sp -= 4;
-
-  ustack[1] = (uint)arg;
-  if(copyout(pgdir, sp, ustack, 8) < 0){
-    p->kstack = 0;
-    p->tid = 0;
-    p->state = UNUSED;
-    release(&ptable.lock);
-    return -1;
-  }
-
-  p->sp = sz - 2*PGSIZE;
-  if(curproc->fidx == curproc->sidx)
-    curproc->sz = sz;
-  else
-    curproc->fidx = (curproc->fidx + 1);
-  p->sz = sz;
-  p->pgdir = pgdir;
-  curproc->sz = sz;
-
-  p->tf->esp = (uint)sp;
-  p->tf->eip = (uint)start_routine;
-  acquire(&ptable.lock);
-  *thread = p->tid;
-  // p->tid = *thread;
-
-  p->state = RUNNABLE;
-  for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-  {
-    if (p->pid == curproc->pid)
-      p->sz = sz;
-  }
-  release(&ptable.lock);
-  // cprintf("create end\n");
+  // release(&ptable.lock);
+  // // cprintf("create end\n");
   return 0;
 }
 
@@ -1076,102 +1155,102 @@ thread_create(thread_t *thread, void*(*start_routine)(void*), void *arg)
 void
 thread_exit(void *retval)
 {
-  struct proc *p = myproc();
-  int fd;
-  // it(p->tid == -1)
-  //   return;
+  // struct proc *p = myproc();
+  // int fd;
+  // // it(p->tid == -1)
+  // //   return;
 
+  // // acquire(&ptable.lock);
+  // p->retval = retval;
+
+  // for(fd = 0; fd < NOFILE; fd++){
+  //   if(p->ofile[fd]){
+  //     fileclose(p->ofile[fd]);
+  //     p->ofile[fd] = 0;
+  //   }
+  // }
+
+  // begin_op();
+  // iput(p->cwd);
+  // end_op();
+  // p->cwd = 0;
   // acquire(&ptable.lock);
-  p->retval = retval;
+  // wakeup1(p->parentproc);
+  // p->state = ZOMBIE;
 
-  for(fd = 0; fd < NOFILE; fd++){
-    if(p->ofile[fd]){
-      fileclose(p->ofile[fd]);
-      p->ofile[fd] = 0;
-    }
-  }
-
-  begin_op();
-  iput(p->cwd);
-  end_op();
-  p->cwd = 0;
-  acquire(&ptable.lock);
-  wakeup1(p->parentproc);
-  p->state = ZOMBIE;
-
-  sched();
-  panic("zombie wakeup");
+  // sched();
+  // panic("zombie wakeup");
 }
 
 int
 thread_join(thread_t thread, void **retval)
 {
-  struct proc *p;
-  uint sp;
-  // struct thread *t;
+//   struct proc *p;
+//   uint sp;
+//   // struct thread *t;
 
-  acquire(&ptable.lock);
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->parentproc != myproc())
-      continue;
-    // if(p->state == RUNNABLE){
-      // for(t = p->threads; t < &p->threads[NTHREAD]; t++){
-        if(p->tid == thread)
-          goto found;
-      // }
-    // }
-  }
+//   acquire(&ptable.lock);
+//   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+//     if(p->parentproc != myproc())
+//       continue;
+//     // if(p->state == RUNNABLE){
+//       // for(t = p->threads; t < &p->threads[NTHREAD]; t++){
+//         if(p->tid == thread)
+//           goto found;
+//       // }
+//     // }
+//   }
 
-  release(&ptable.lock);
-  return -1;
+//   release(&ptable.lock);
+//   return -1;
 
-found:
-  for(;;){
-    if(p->state == ZOMBIE)
-      break;
-    sleep((void*)myproc(), &ptable.lock);
-  }
+// found:
+//   for(;;){
+//     if(p->state == ZOMBIE)
+//       break;
+//     sleep((void*)myproc(), &ptable.lock);
+//   }
 
-  *retval = p->retval;
-  kfree(p->kstack);
-  p->kstack = 0;
-  p->state = UNUSED;
-  p->name[0] = 0;
-  p->pid = 0;
-  p->parent = 0;
-  p->killed = 0;
-  p->tid = 0;
-  p->retval = 0;
-  p->parentproc = 0;
-  sp = p->sp;
-  p->sp = 0;
-  deallocuvm(p->pgdir, sp + 2*PGSIZE, sp);
-  myproc()->ustack[myproc()->sidx] = sp;
-  myproc()->sidx = (myproc()->sidx + 1);
+//   *retval = p->retval;
+//   kfree(p->kstack);
+//   p->kstack = 0;
+//   p->state = UNUSED;
+//   p->name[0] = 0;
+//   p->pid = 0;
+//   p->parent = 0;
+//   p->killed = 0;
+//   p->tid = 0;
+//   p->retval = 0;
+//   p->parentproc = 0;
+//   sp = p->sp;
+//   p->sp = 0;
+//   deallocuvm(p->pgdir, sp + 2*PGSIZE, sp);
+//   myproc()->ustack[myproc()->sidx] = sp;
+//   myproc()->sidx = (myproc()->sidx + 1);
 
-  release(&ptable.lock);
+//   release(&ptable.lock);
   return 0;
 }
 
 void
 thread_terminate(int pid, int tid)
 {
-  struct proc *p;
-  acquire(&ptable.lock);
-  for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-  {
-    if(pid == 0)
-      continue;
-    if(p->pid == pid && p->tid != tid)
-    {
-      kfree(p->kstack);
-      p->kstack = 0;
-      p->pid = 0;
-      p->parent = 0;
-      p->name[0] = 0;
-      p->killed = 0;
-      p->state = UNUSED;
-    }
-  }
-  release(&ptable.lock);
+  // struct proc *p;
+  // acquire(&ptable.lock);
+  // for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  // {
+  //   if(pid == 0)
+  //     continue;
+  //   if(p->pid == pid && p->tid != tid)
+  //   {
+  //     kfree(p->kstack);
+  //     p->kstack = 0;
+  //     p->pid = 0;
+  //     p->parent = 0;
+  //     p->name[0] = 0;
+  //     p->killed = 0;
+  //     p->state = UNUSED;
+  //   }
+  // }
+  // release(&ptable.lock);
 }

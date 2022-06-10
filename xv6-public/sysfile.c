@@ -16,6 +16,292 @@
 #include "file.h"
 #include "fcntl.h"
 
+#define NUM_USER 10
+
+struct
+{
+  struct spinlock lock;
+  struct inode *ip;
+  char user[NUM_USER][2][16];
+  int online[NUM_USER];
+} utable;
+
+int
+accountcheck(char* id, char* pw)
+{
+  acquire(&utable.lock);
+  for(int i = 0; i < NUM_USER; i++){
+    if(strncmp(utable.user[i][0], id, 16) == 0 && strncmp(utable.user[i][1], pw, 16) == 0){
+      utable.online[i] = 1;
+      release(&utable.lock);
+      return 0;
+    }
+  }
+  release(&utable.lock);
+  return -1;
+}
+
+int
+usysinit(void)
+{
+  initlock(&utable.lock, "utable");
+  acquire(&utable.lock);
+  for(int i = 0; i < NUM_USER; i++){
+    for(int j = 0; j < 16; j++){
+      utable.user[i][0][j] = '\0';
+      utable.user[i][1][j] = '\0';
+      utable.online[i] = 0;
+    }
+  }
+  release(&utable.lock);
+
+  begin_op();
+  char *pathname = "./useraccount";
+  char name[DIRSIZ];
+  struct inode *ip, *dp;
+
+  if((dp = nameiparent(pathname, name)) == 0)
+    return -1;
+  ilock(dp);
+
+  if((ip = dirlookup(dp, name, 0)) == 0){
+    acquire(&utable.lock);
+    strncpy(utable.user[0][0], "root", 16);
+    strncpy(utable.user[0][1], "0000", 16);
+    utable.online[0] = 1;
+    release(&utable.lock);
+
+    if((ip = ialloc(dp->dev, T_FILE)) == 0){
+      panic("create: ialloc");
+    }
+    ilock(ip);
+    ip->major = 0;
+    ip->minor = 0;
+    ip->nlink = 1;
+    strncpy(ip->user, "root", 16);
+    iupdate(ip);
+
+    if((dirlink(dp, name, ip->inum)) < 0)
+      panic("create: dirlink");
+
+    if(writei(ip, utable.user[0][0], 0, sizeof(utable.user)) < 0){
+      cprintf("writei error\n");
+      iunlock(ip);
+      end_op();
+      return -1;
+    }
+    iupdate(dp);
+    iupdate(ip);
+    iunlockput(dp);
+    iunlock(ip);
+  }
+  else{
+    iunlockput(dp);
+    ilock(ip);
+    if((ip = namei(pathname)) == 0){
+      iunlock(ip);
+      end_op();
+      return -1;
+    }
+    if(readi(ip, utable.user[0][0], 0, sizeof(utable.user)) < 0){
+      iunlock(ip);
+      end_op();
+      return -1;
+    }
+    iunlockput(ip);
+    acquire(&utable.lock);
+    strncpy(utable.user[0][0], "root", 16);
+    strncpy(utable.user[0][1], "0000", 16);
+    release(&utable.lock);
+  }
+
+  acquire(&utable.lock);
+  utable.ip = ip;
+  release(&utable.lock);
+
+  end_op();
+  return 0;
+}
+
+int
+addUser(char* username, char* password)
+{
+  if(strncmp(myproc()->id, "root", 16))
+    return -1;
+
+  acquire(&utable.lock);
+  for(int i = 0; i < NUM_USER; i++){
+    if(!strncmp(utable.user[i][0], username, 16)){
+      release(&utable.lock);
+      return -1;
+    }
+  }
+
+  int i;
+  for(i = 0; i < NUM_USER; i++){
+    if(utable.online[i] == 0)
+      break;
+  }
+  if(i == NUM_USER){
+    release(&utable.lock);
+    return -1;
+  }
+  strncpy(utable.user[i][0], username, 16);
+  strncpy(utable.user[i][1], password, 16);
+  utable.online[i] = 1;
+  release(&utable.lock);
+
+  begin_op();
+  ilock(utable.ip);
+  writei(utable.ip, utable.user[0][0], 0, sizeof(utable.user));
+  iunlock(utable.ip);
+
+  struct inode *ip, *dp;
+  if((dp = namei("/")) == 0){
+    end_op();
+    return -1;
+  }
+
+  if((ip = dirlookup(dp, username, 0)) == 0){
+    if((ip = ialloc(dp->dev, T_DIR)) == 0)
+      panic("create: ialloc");
+    ilock(dp);
+    ilock(ip);
+    ip->major = 0;
+    ip->minor = 0;
+    ip->nlink = 1;
+    strncpy(ip->user, username, 16);
+    iupdate(ip);
+
+    dp->nlink++;
+    iupdate(dp);
+    if(dirlink(ip, ".", ip->inum) < 0 || dirlink(ip, "..", dp->inum) < 0)
+      panic("create dots");
+    if(dirlink(dp, username, ip->inum) < 0)
+      panic("create: dirlink");
+
+    iupdate(ip);
+    iupdate(dp);
+    iunlockput(ip);
+    iunlockput(dp);
+  }
+  end_op();
+  return 0;
+}
+
+int
+deleteUser(char *username)
+{
+  struct proc *curproc = myproc();
+  if(strncmp(curproc->id, "root", 16))
+    return -1;
+  if(!strncmp(username, "root", 16))
+    return -1;
+
+  acquire(&utable.lock);
+  for(int i = 0; i < NUM_USER; i++){
+    if(!strncmp(utable.user[i][0], username, 16)){
+      for(int j = 0; j < 16; j++){
+        utable.user[i][0][j] = '\0';
+        utable.user[i][1][j] = '\0';
+      }
+      utable.online[i] = 0;
+      release(&utable.lock);
+
+      begin_op();
+      ilock(utable.ip);
+      if(writei(utable.ip, utable.user[0][0], 0, sizeof(utable.user)) < 0){
+        end_op();
+        return -1;
+      }
+      iunlock(utable.ip);
+      end_op();
+      return 0;
+    }
+  }
+  release(&utable.lock);
+  return -1;
+}
+
+int
+chmod(char* pathname, int mode)
+{
+  struct inode *ip;
+
+  begin_op();
+  if((ip = namei(pathname)) == 0){
+    end_op();
+    return -1;
+  }
+
+  ilock(ip);
+  if(ip->type != T_DEV){
+    if((strncmp(myproc()->id, "root", 16) != 0) && (strncmp(myproc()->id, ip->user, 16) != 0)){
+      iunlock(ip);
+      end_op();
+      return -1;
+    }
+  }
+  if(ip->type == T_DEV){
+    iunlock(ip);
+    end_op();
+    return -1;
+  }
+
+  ip->mode = mode;
+  iupdate(ip);
+  iunlock(ip);
+  end_op();
+
+  return 0;
+}
+
+int 
+sys_usysinit(void)
+{
+  return usysinit();
+}
+
+int 
+sys_addUser(void)
+{
+  char *id, *pw;
+  if (argstr(0, &id) < 0 || argstr(1, &pw) < 0)
+    return -1;
+  return addUser(id, pw);
+}
+
+int 
+sys_deleteUser(void)
+{
+  char *id;
+  if (argstr(0, &id) < 0)
+    return -1;
+
+  return deleteUser(id);
+}
+
+int
+sys_accountcheck(void)
+{
+  char *id, *pw;
+  if(argstr(0, &id) < 0 || argstr(1, &pw) < 0)
+    return -1;
+  return accountcheck(id, pw);
+}
+
+int
+sys_chmod(void)
+{
+  char *pathname;
+  int mode;
+
+  if(argstr(0, &pathname) < 0 || argint(1, &mode) < 0)
+    return -1;
+  
+  return chmod(pathname, mode);
+}
+
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
 static int
@@ -199,7 +485,16 @@ sys_unlink(void)
   }
 
   ilock(dp);
-
+  if(dp->type != T_DEV){
+    if(!strncmp(myproc()->id, "root", 16) || !strncmp(myproc()->id, dp->user, 16)){
+      if(!(dp->mode & MODE_WUSR))
+        goto bad;
+    }
+    else{
+      if(!(dp->mode & MODE_WOTH))
+        goto bad;
+    }
+  }
   // Cannot unlink "." or "..".
   if(namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
     goto bad;
@@ -251,10 +546,38 @@ create(char *path, short type, short major, short minor)
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
+    if(ip->type != T_DEV){
+      if(!strncmp(myproc()->id, "root", 16) || !strncmp(myproc()->id, ip->user, 16)){
+        if(!(ip->mode & MODE_WUSR)){
+          iunlockput(ip);
+          return 0;
+        }
+      }
+      else{
+        if(!(ip->mode & MODE_WOTH)){
+          iunlockput(ip);
+          return 0;
+        }
+      }
+    }
     if(type == T_FILE && ip->type == T_FILE)
       return ip;
     iunlockput(ip);
     return 0;
+  }
+  if(dp->type != T_DEV){
+    if(!strncmp(myproc()->id, "root", 16) || !strncmp(myproc()->id, dp->user, 16)){
+      if(!(dp->mode & MODE_WUSR)){
+        iunlockput(dp);
+        return 0; 
+      }
+    }
+    else{
+      if(!(dp->mode & MODE_WOTH)){
+        iunlockput(dp);
+        return 0;
+      }
+    }
   }
 
   if((ip = ialloc(dp->dev, type)) == 0)
@@ -264,6 +587,7 @@ create(char *path, short type, short major, short minor)
   ip->major = major;
   ip->minor = minor;
   ip->nlink = 1;
+  strncpy(ip->user, myproc()->id, sizeof(myproc()->id));
   iupdate(ip);
 
   if(type == T_DIR){  // Create . and .. entries.
@@ -307,6 +631,57 @@ sys_open(void)
       return -1;
     }
     ilock(ip);
+    if(ip->type != T_DEV){
+      if(omode == O_RDONLY){
+        if (!strncmp(myproc()->id, "root", 16) || !strncmp(myproc()->id, ip->user, 16)){
+          if(!(ip->mode & MODE_RUSR)){
+            iunlockput(ip);
+            end_op();
+            return -1;
+          }
+        }
+        else{
+          if(!(ip->mode & MODE_ROTH)){
+            iunlockput(ip);
+            end_op();
+            return -1;
+          }
+        }
+      }
+      else if(omode == O_WRONLY){
+        if(!strncmp(myproc()->id, "root", 16) || !strncmp(myproc()->id, ip->user, 16)){
+          if(!(ip->mode & MODE_WUSR)){
+            iunlockput(ip);
+            end_op();
+            return -1;
+          }
+        }
+        else{
+          if(!(ip->mode & MODE_WOTH)){
+            iunlockput(ip);
+            end_op();
+            return -1;
+          }
+        }
+      }
+      else if(omode == O_RDWR){
+        if(!strncmp(myproc()->id, "root", 16) || !strncmp(myproc()->id, ip->user, 16)){
+          if(!(ip->mode & MODE_WUSR && ip->mode & MODE_RUSR)){
+            iunlockput(ip);
+            end_op();
+            return -1;
+          }
+        }
+        else{
+          if(!(ip->mode & MODE_WOTH && ip->mode & MODE_ROTH)){
+            iunlockput(ip);
+            end_op();
+            return -1;
+          }
+        }
+      }
+    }
+
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();
@@ -381,6 +756,22 @@ sys_chdir(void)
     return -1;
   }
   ilock(ip);
+  if(ip->type != T_DEV){
+    if(!strncmp(myproc()->id, "root", 16) || !strncmp(myproc()->id, ip->user, 16)){
+      if(!(ip->mode & MODE_XUSR)){
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+    }
+    else{
+      if(!(ip->mode & MODE_XOTH)){
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+    }
+  }
   if(ip->type != T_DIR){
     iunlockput(ip);
     end_op();
