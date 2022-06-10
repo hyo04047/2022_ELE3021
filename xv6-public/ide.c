@@ -107,7 +107,6 @@ void
 ideintr(void)
 {
   struct buf *b;
-  // cprintf("ideintr\n");
   // First queued buffer is the active request.
   acquire(&idelock);
 
@@ -141,7 +140,6 @@ void
 iderw(struct buf *b)
 {
   struct buf **pp;
-  // cprintf("iderw\n");
   if(!holdingsleep(&b->lock))
     panic("iderw: buf not locked");
   if((b->flags & (B_VALID|B_DIRTY)) == B_VALID)

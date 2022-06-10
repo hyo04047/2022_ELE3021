@@ -24,7 +24,6 @@ exec(char *path, char **argv)
   struct proc *curproc = myproc();
   // struct thread *t;
   begin_op();
-  // cprintf("executing %s\n", path);
   if((ip = namei(path)) == 0){
     end_op();
     cprintf("exec: fail\n");

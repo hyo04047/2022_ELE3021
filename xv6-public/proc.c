@@ -238,12 +238,10 @@ fork(void)
   struct proc *np;
   // struct proc *p;
   struct proc *curproc = myproc();
-  // cprintf("fork start\n");
   // Allocate process.
   if((np = allocproc()) == 0){
     return -1;
   }
-  // cprintf("fork-1\n");
   // Copy process state from proc.
   if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
     kfree(np->kstack);
@@ -254,7 +252,6 @@ fork(void)
 
   // acquire(&ptable.lock);
   
-  // cprintf("fork-2\n");
   // np->curthread = 0;
   // for(i = 0; i < NTHREAD; i++)
   //   np->ustack[i] = curproc->ustack[i];
@@ -304,7 +301,6 @@ fork(void)
   // np->threads->state = RUNNABLE;
 
   release(&ptable.lock);
-  // cprintf("fork end\n");
   return pid;
 }
 
@@ -314,13 +310,11 @@ int fork2(char *username)
   struct proc *np;
   // struct proc *p;
   struct proc *curproc = myproc();
-  // cprintf("fork start\n");
   // Allocate process.
   if ((np = allocproc()) == 0)
   {
     return -1;
   }
-  // cprintf("fork-1\n");
   // Copy process state from proc.
   if ((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0)
   {
@@ -332,7 +326,6 @@ int fork2(char *username)
 
   // acquire(&ptable.lock);
 
-  // cprintf("fork-2\n");
   // np->curthread = 0;
   // for(i = 0; i < NTHREAD; i++)
   //   np->ustack[i] = curproc->ustack[i];
@@ -382,7 +375,6 @@ int fork2(char *username)
   // np->threads->state = RUNNABLE;
 
   release(&ptable.lock);
-  // cprintf("fork end\n");
   return pid;
 }
 

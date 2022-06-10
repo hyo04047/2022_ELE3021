@@ -200,7 +200,6 @@ ialloc(uint dev, short type)
 
   for(inum = 1; inum < sb.ninodes; inum++){
     bp = bread(dev, IBLOCK(inum, sb));
-    // cprintf("bread %d block\n", IBLOCK(inum, sb));
     dip = (struct dinode*)bp->data + inum%IPB;
     if(dip->type == 0){  // a free inode
       memset(dip, 0, sizeof(*dip));
@@ -213,7 +212,6 @@ ialloc(uint dev, short type)
       if(dip->type == T_DEV)
         dip->mode = MODE_RUSR | MODE_WUSR | MODE_XUSR | MODE_ROTH | MODE_WOTH | MODE_XOTH;
       safestrcpy(dip->id, "root", 16);
-      // strcpy(dip->id, "KERNEL");
 
       log_write(bp);   // mark it allocated on the disk
       brelse(bp);
@@ -473,8 +471,6 @@ readi(struct inode *ip, char *dst, uint off, uint n)
 {
   uint tot, m;
   struct buf *bp;
-  // if(ip->inum == ROOTINO)
-  //   cprintf("read sb : %d~%d\n", off, off+n);
   if(ip->type == T_DEV){
     if(ip->major < 0 || ip->major >= NDEV || !devsw[ip->major].read)
       return -1;
@@ -503,8 +499,6 @@ writei(struct inode *ip, char *src, uint off, uint n)
 {
   uint tot, m;
   struct buf *bp;
-  // if(ip->inum == ROOTINO)
-  //   cprintf("write sb : %s %d~%d\n", src, off, off+n);
   if(ip->type == T_DEV){
     if(ip->major < 0 || ip->major >= NDEV || !devsw[ip->major].write)
       return -1;

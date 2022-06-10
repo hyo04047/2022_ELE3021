@@ -62,8 +62,6 @@ static struct buf*
 bget(uint dev, uint blockno)
 {
   struct buf *b;
-  // if(blockno == 1)
-    // cprintf("block 1 called\n");
   acquire(&bcache.lock);
 
   // Is the block already cached?
